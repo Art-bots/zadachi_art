@@ -1,3 +1,5 @@
 pyTelegramBotAPI==4.12.0
-APScheduler==3.10.1
+APScheduler
+pytz
+tzlocal
 python-dotenv==1.0.0
