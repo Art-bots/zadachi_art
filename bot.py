@@ -3,9 +3,11 @@ import logging
 from datetime import datetime, timedelta
 from telebot import TeleBot, types
 from apscheduler.schedulers.background import BackgroundScheduler
+from bot_logger import setup_logger
 from config import SENDER_USER_IDS, RECEIVER_USER_IDS, INFO_CHAT_ID
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
@@ -13,7 +15,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
+logger = setup_logger()
 
 bot = TeleBot(TOKEN)
 scheduler = BackgroundScheduler()
@@ -256,6 +258,10 @@ class TaskManager:
                 f"✅ Задача #{task_number} успешно создана!",
                 reply_markup=types.ReplyKeyboardRemove()
             )
+
+            # Логируем информацию по задаче
+            task_info_str = json.dumps(task_data, ensure_ascii=False, indent=2)
+            logger.info(f"Task #{task_number} was created with data:\n{task_info_str}")
 
         except Exception as e:
             logger.error(f"Error finalizing task: {e}")
@@ -534,7 +540,6 @@ def handle_user_response(call, action, task_number):
         except Exception as e:
             logger.error(f"Error updating message: {e}")
             bot.answer_callback_query(call.id, "Ошибка обновления!")
-
 
 if __name__ == '__main__':
     logger.info("Starting bot...")
