@@ -87,7 +87,6 @@ class TaskManager:
                     chat_id=INFO_CHAT_ID,
                     message_id=message_id,
                     caption=self.generate_task_message(task_number, task_data, with_status=True),
-                    parse_mode="Markdown",
                     reply_markup=self.generate_task_controls(task_number, task_data['is_resolved'])
                 )
             else:
@@ -95,7 +94,6 @@ class TaskManager:
                     chat_id=INFO_CHAT_ID,
                     message_id=message_id,
                     text=self.generate_task_message(task_number, task_data, with_status=True),
-                    parse_mode="Markdown",
                     reply_markup=self.generate_task_controls(task_number, task_data['is_resolved'])
                 )
         except Exception as e:
@@ -110,14 +108,12 @@ class TaskManager:
                         chat_id=INFO_CHAT_ID,
                         message_id=task_data['main_chat_message_id'],
                         caption=self.generate_task_message(task_number, task_data, with_status=True),
-                        parse_mode="Markdown"
                     )
                 else:
                     bot.edit_message_text(
                         chat_id=INFO_CHAT_ID,
                         message_id=task_data['main_chat_message_id'],
                         text=self.generate_task_message(task_number, task_data, with_status=True),
-                        parse_mode="Markdown"
                     )
         except Exception as e:
             logger.error(f"Error updating main chat: {e}")
