@@ -1,5 +1,6 @@
 import json
 import logging
+import traceback
 from datetime import datetime, timedelta
 from telebot import TeleBot, types
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -80,7 +81,7 @@ class TaskManager:
         try:
             thread_id = self.threads[task_number]
             message_id = self.message_ids[task_number]
-            
+
             if task_data.get('photo'):
                 bot.edit_message_caption(
                     chat_id=INFO_CHAT_ID,
@@ -140,7 +141,8 @@ class TaskManager:
         self.pending_tasks[chat_id] = {field: None for field, _ in TASK_FIELDS}
         return self.pending_tasks[chat_id]
 
-    def get_next_field(self, task_data):
+    @staticmethod
+    def get_next_field(task_data):
         for field, _ in TASK_FIELDS:
             if task_data[field] is None:
                 return field
@@ -164,7 +166,7 @@ class TaskManager:
             'is_resolved': False,
             'sender_id': chat_id
         })
-        
+
         self.tasks[task_number] = task_data
         self.task_counter += 1
 
@@ -188,8 +190,8 @@ class TaskManager:
             # Создание форум топика
             topic_name = f"🔴 {task_number} {task_data['client_name'][:MAX_TOPIC_LENGTH]}"
             forum_topic = bot.create_forum_topic(
-                INFO_CHAT_ID, 
-                topic_name, 
+                INFO_CHAT_ID,
+                topic_name,
                 icon_color=ICON_COLOR
             )
             thread_id = forum_topic.message_thread_id
@@ -229,7 +231,7 @@ class TaskManager:
                         )
                     else:
                         bot.send_message(
-                            receiver_id, 
+                            receiver_id,
                             self.generate_task_message(task_number, task_data, with_status=False),
                             parse_mode="Markdown",
                             reply_markup=self.main_task_keyboard(task_number)
@@ -264,7 +266,9 @@ class TaskManager:
             logger.info(f"Task #{task_number} was created with data:\n{task_info_str}")
 
         except Exception as e:
-            logger.error(f"Error finalizing task: {e}")
+            #logger.error(f"Error finalizing task: {e}")
+            error_details = traceback.format_exc()
+            logger.error(f"Error sending to user:{error_details}")
             bot.send_message(chat_id, "❌ Ошибка при создании задачи.")
             self.save_state()
 
@@ -375,10 +379,6 @@ def send_unanswered_notification(task_number):
 
 def skip_step_keyboard():
     return task_manager.create_keyboard([("Пропустить шаг", "skip_step")])
-
-
-
-
 
 
 def handle_media_message(message, task_data):
