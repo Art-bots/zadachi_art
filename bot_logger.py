@@ -1,23 +1,30 @@
-from datetime import datetime
 import logging
+from logging.handlers import TimedRotatingFileHandler
 import os
 
 def setup_logger():
-
-    today_str = datetime.now().strftime("%Y-%m-%d")
-
-    log_dir = os.path.join("logs", today_str)
-    os.makedirs(log_dir, exist_ok=True)  # Создаём папку, если её нет
-
-    log_file_path = os.path.join(log_dir, "bot.log")
+    log_dir = "logs"
+    os.makedirs(log_dir, exist_ok=True)
 
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
 
-    file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    handler = TimedRotatingFileHandler(
+        filename=os.path.join(log_dir, "bot.log"),
+        when="midnight",
+        interval=1,
+        backupCount=7,
+        encoding="utf-8"
+    )
+    handler.suffix = "%Y-%m-%d"  # формат добавляемой даты в имени файла
+    handler.setFormatter(formatter)
+
+    # Удаляем старые обработчики (если есть)
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    logger.addHandler(handler)
 
     return logger
