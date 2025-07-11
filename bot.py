@@ -177,13 +177,11 @@ class TaskManager:
                     INFO_CHAT_ID,
                     task_data['photo'],
                     caption=self.generate_task_message(task_number, task_data, with_status=False),
-                    parse_mode="Markdown"
                 )
             else:
                 main_msg = bot.send_message(
                     INFO_CHAT_ID,
                     self.generate_task_message(task_number, task_data, with_status=False),
-                    parse_mode="Markdown"
                 )
             task_data['main_chat_message_id'] = main_msg.message_id
 
@@ -202,7 +200,6 @@ class TaskManager:
                     INFO_CHAT_ID,
                     task_data['photo'],
                     caption=self.generate_task_message(task_number, task_data, with_status=False),
-                    parse_mode="Markdown",
                     message_thread_id=thread_id,
                     reply_markup=self.generate_task_controls(task_number, False)
                 )
@@ -210,7 +207,6 @@ class TaskManager:
                 forum_msg = bot.send_message(
                     INFO_CHAT_ID,
                     self.generate_task_message(task_number, task_data, with_status=False),
-                    parse_mode="Markdown",
                     message_thread_id=thread_id,
                     reply_markup=self.generate_task_controls(task_number, False)
                 )
@@ -226,14 +222,12 @@ class TaskManager:
                             receiver_id,
                             task_data['photo'],
                             caption=self.generate_task_message(task_number, task_data, with_status=False),
-                            parse_mode="Markdown",
                             reply_markup=self.main_task_keyboard(task_number)
                         )
                     else:
                         bot.send_message(
                             receiver_id,
                             self.generate_task_message(task_number, task_data, with_status=False),
-                            parse_mode="Markdown",
                             reply_markup=self.main_task_keyboard(task_number)
                         )
                     scheduler.add_job(
