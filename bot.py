@@ -261,7 +261,7 @@ class TaskManager:
 
             bot.send_message(
                 chat_id,
-                f"✅ Задача #{task_number} успешно создана!",
+                f"✅ Задача {task_number} успешно создана!",
                 reply_markup=types.ReplyKeyboardRemove(),
                 parse_mode="MarkdownV2"
             )
