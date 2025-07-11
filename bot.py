@@ -8,7 +8,6 @@ from bot_logger import setup_logger
 from config import SENDER_USER_IDS, RECEIVER_USER_IDS, INFO_CHAT_ID
 import os
 from dotenv import load_dotenv
-import re
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -172,22 +171,19 @@ class TaskManager:
         self.task_counter += 1
 
         try:
-            raw_message = self.generate_task_message(task_number, task_data, with_status=False)
-            safe_message = self.escape_markdown_v2(raw_message)
-
             # Отправка в основной чат
             if task_data.get('photo'):
                 main_msg = bot.send_photo(
                     INFO_CHAT_ID,
                     task_data['photo'],
-                    caption=safe_message,
-                    parse_mode="MarkdownV2"
+                    caption=self.generate_task_message(task_number, task_data, with_status=False),
+                    parse_mode="Markdown"
                 )
             else:
                 main_msg = bot.send_message(
                     INFO_CHAT_ID,
                     self.generate_task_message(task_number, task_data, with_status=False),
-                    parse_mode="MarkdownV2"
+                    parse_mode="Markdown"
                 )
             task_data['main_chat_message_id'] = main_msg.message_id
 
@@ -205,16 +201,16 @@ class TaskManager:
                 forum_msg = bot.send_photo(
                     INFO_CHAT_ID,
                     task_data['photo'],
-                    caption=safe_message,
-                    parse_mode="MarkdownV2",
+                    caption=self.generate_task_message(task_number, task_data, with_status=False),
+                    parse_mode="Markdown",
                     message_thread_id=thread_id,
                     reply_markup=self.generate_task_controls(task_number, False)
                 )
             else:
                 forum_msg = bot.send_message(
                     INFO_CHAT_ID,
-                    safe_message,
-                    parse_mode="MarkdownV2",
+                    self.generate_task_message(task_number, task_data, with_status=False),
+                    parse_mode="Markdown",
                     message_thread_id=thread_id,
                     reply_markup=self.generate_task_controls(task_number, False)
                 )
@@ -229,15 +225,15 @@ class TaskManager:
                         bot.send_photo(
                             receiver_id,
                             task_data['photo'],
-                            caption=safe_message,
-                            parse_mode="MarkdownV2",
+                            caption=self.generate_task_message(task_number, task_data, with_status=False),
+                            parse_mode="Markdown",
                             reply_markup=self.main_task_keyboard(task_number)
                         )
                     else:
                         bot.send_message(
                             receiver_id,
-                            safe_message,
-                            parse_mode="MarkdownV2",
+                            self.generate_task_message(task_number, task_data, with_status=False),
+                            parse_mode="Markdown",
                             reply_markup=self.main_task_keyboard(task_number)
                         )
                     scheduler.add_job(
@@ -262,8 +258,7 @@ class TaskManager:
             bot.send_message(
                 chat_id,
                 f"✅ Задача #{task_number} успешно создана!",
-                reply_markup=types.ReplyKeyboardRemove(),
-                parse_mode="MarkdownV2"
+                reply_markup=types.ReplyKeyboardRemove()
             )
 
             # Логируем информацию по задаче
@@ -276,14 +271,6 @@ class TaskManager:
             logger.error(f"Error sending to user:{error_details}")
             bot.send_message(chat_id, "❌ Ошибка при создании задачи.")
             self.save_state()
-
-    @staticmethod
-    def escape_markdown_v2(text):
-        if not text:
-            return ""
-        escape_chars = r'_*[]()~`>#+-=|{}.!'
-        return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
-
 
     def generate_task_message(self, task_number, task_data, with_status=True):
         message = [
