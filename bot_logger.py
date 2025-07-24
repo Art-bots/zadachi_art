@@ -15,7 +15,7 @@ def setup_logger():
         filename=os.path.join(log_dir, "bot.log"),
         when="midnight",
         interval=1,
-        backupCount=7,
+        backupCount=0,
         encoding="utf-8"
     )
     handler.suffix = "%Y-%m-%d"  # формат добавляемой даты в имени файла
