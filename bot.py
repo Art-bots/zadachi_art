@@ -518,6 +518,10 @@ def handle_user_response(call, action, task_number):
             task_data['responded_users'].append(user_id)
 
         task_data['status'][user_name] = status
+        logger.info(
+            f"Task #{task_number}: user - '{user_name}' status - '{status}'. "
+            f"All statuses: {task_data['status']}"
+        )
         task_manager.update_main_chat_status(task_number)
 
         try:
