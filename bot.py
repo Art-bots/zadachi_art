@@ -436,7 +436,7 @@ def handle_take_later_time(message):
 
     # Формируем статус с доп. комментарием пользователя
     time_note = message.text.strip()
-    status_text = f"{STATUS_MAP['take_later']} (время: {time_note})"
+    status_text = f"{STATUS_MAP['take_later']} ({time_note})"
     task_data['status'][user_name] = status_text
 
     # Сохраним пользователя в responded_users
