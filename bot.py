@@ -37,7 +37,8 @@ TASK_FIELDS = [
 STATUS_MAP = {
     'take': 'готов взять задачу',
     'no_competence': 'не уверен, нужны уточнения',
-    'cant_take': 'не может взять задачу'
+    'cant_take': 'не может взять задачу',
+    'take_later':'может, но в другое время'
 }
 
 ICON_COLOR = 7322096
@@ -288,9 +289,9 @@ class TaskManager:
     def main_task_keyboard(self, task_number):
         return self.create_keyboard([
             [("Беру задачу", f"user_take:{task_number}")],
-            [("Не уверен, нужны уточнения",
-              f"user_no_competence:{task_number}")],
-            [("Не могу взять", f"user_cant_take:{task_number}")]
+            [("Не уверен, нужны уточнения", f"user_no_competence:{task_number}")],
+            [("Не могу взять", f"user_cant_take:{task_number}")],
+            [("Могу взять, но в другое время", f"user_take_later:{task_number}")]
         ])
 
     def generate_task_controls(self, task_number, is_resolved):
@@ -422,6 +423,33 @@ def process_task_data(message):
         task_manager.finalize_task(chat_id, task_data)
 
 
+@bot.message_handler(func=lambda message: hasattr(task_manager, "pending_time_input") and message.from_user.id in task_manager.pending_time_input)
+def handle_take_later_time(message):
+    user_id = message.from_user.id
+    task_number = task_manager.pending_time_input.pop(user_id)  # Забираем и удаляем флаг
+    task_data = task_manager.tasks.get(task_number)
+    if not task_data:
+        bot.send_message(message.chat.id, "Задача не найдена.")
+        return
+
+    user_name = f"{message.from_user.first_name} {message.from_user.last_name}" if message.from_user.last_name else message.from_user.first_name
+
+    # Формируем статус с доп. комментарием пользователя
+    time_note = message.text.strip()
+    status_text = f"{STATUS_MAP['take_later']} (время: {time_note})"
+    task_data['status'][user_name] = status_text
+
+    # Сохраним пользователя в responded_users
+    if user_id not in task_data['responded_users']:
+        task_data['responded_users'].append(user_id)
+
+    # Сохраняем, обновляем основной чат
+    task_manager.update_main_chat_status(task_number)
+    task_manager.save_state()
+
+    bot.send_message(message.chat.id, f"Спасибо! Ваш ответ учтён: {status_text}")
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith(('forum_', 'user_', 'skip')))
 def callback_handler(call):
     try:
@@ -508,9 +536,27 @@ def handle_forum_action(call, action, task_number):
 
 
 def handle_user_response(call, action, task_number):
+
     task_data = task_manager.tasks[task_number]
     user_id = call.from_user.id
     user_name = f"{call.from_user.first_name} {call.from_user.last_name}" if call.from_user.last_name else call.from_user.first_name
+
+    if action == "take_later":
+        # Попросим пользователя ввести время
+        msg = bot.send_message(
+            call.message.chat.id,
+            "Пожалуйста, напишите, когда сможете взять задачу (в формате, '1 августа в 17:00' или с указанием промежутка '1-3 августа в любое время')."
+        )
+        # Передадим task_number и user_id через state (например, в dict pending_time_input)
+        if not hasattr(task_manager, "pending_time_input"):
+            task_manager.pending_time_input = {}
+        task_manager.pending_time_input[user_id] = task_number
+        # Отключим клавиатуру для этого сообщения
+        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                      reply_markup=None)
+        bot.answer_callback_query(call.id, "Укажите желаемое время")
+        return
+
     status = STATUS_MAP.get(action)
 
     if status:
