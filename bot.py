@@ -453,49 +453,24 @@ def handle_take_later_time(message):
 @bot.callback_query_handler(func=lambda call: call.data.startswith(('forum_', 'user_', 'skip')))
 def callback_handler(call):
     try:
-        logger.info(f"Callback data: {call.data} от пользователя {call.from_user.id}")
-
         if call.data == "skip_step":
-            logger.info(f"Обработка skip_step для пользователя {call.from_user.id}")
             handle_skip_step(call)
             return
 
         parts = call.data.split(':', 1)
-        logger.info(f"parts после split: {parts}")
-
         prefix_action = parts[0]
-        task_number = None
-
-        if len(parts) > 1:
-            try:
-                task_number = int(parts[1])
-                logger.info(f"Распознан task_number: {task_number}")
-            except ValueError:
-                logger.error(f"Некорректный формат номера задачи: '{parts[1]}' от пользователя {call.from_user.id}")
-        else:
-            logger.warning(f"В callback data нет номера задачи: {call.data} от пользователя {call.from_user.id}")
-
-        if task_number is None:
-            logger.error(f"task_number is None, callback data: {call.data}, user_id: {call.from_user.id}")
-            bot.answer_callback_query(call.id, "Некорректный запрос (нет номера задачи).")
-            return
+        task_number = int(parts[1]) if len(parts) > 1 else None
 
         if prefix_action.startswith('forum_'):
             action = prefix_action.split('_', 1)[1]
-            logger.info(f"Обработка forum_ с action: {action}, task_number: {task_number}")
             handle_forum_action(call, action, task_number)
         elif prefix_action.startswith('user_'):
             action = prefix_action.split('_', 1)[1]
-            logger.info(f"Обработка user_ с action: {action}, task_number: {task_number}")
             handle_user_response(call, action, task_number)
-        else:
-            logger.error(f"Неизвестный prefix_action: {prefix_action}, callback data: {call.data}")
-            bot.answer_callback_query(call.id, "Некорректный тип действия.")
 
     except Exception as e:
-        logger.error(f"Callback error: {e}, callback data: {getattr(call, 'data', None)}, user_id: {getattr(call.from_user, 'id', None)}")
+        logger.error(f"Callback error: {e}")
         bot.answer_callback_query(call.id, "Ошибка обработки запроса")
-
 
 
 def handle_skip_step(call):
@@ -561,49 +536,30 @@ def handle_forum_action(call, action, task_number):
 
 
 def handle_user_response(call, action, task_number):
-    logger.info(f"handle_user_response: action={action}, task_number={task_number}, user_id={call.from_user.id}")
 
-    # Безопасно получить данные задачи
-    task_data = task_manager.tasks.get(task_number)
-    if not task_data:
-        logger.error(f"Задача с номером {task_number} не найдена! user_id={call.from_user.id}")
-        bot.send_message(
-            call.message.chat.id,
-            f"Задача с номером {task_number} не найдена или уже неактуальна."
-        )
-        bot.answer_callback_query(call.id, "Задача не найдена.")
-        return
-
+    task_data = task_manager.tasks[task_number]
     user_id = call.from_user.id
     user_name = f"{call.from_user.first_name} {call.from_user.last_name}" if call.from_user.last_name else call.from_user.first_name
 
     if action == "take_later":
-        logger.info(f"user_id={user_id} запросил вариант взять задачу позже для task_number={task_number}")
         # Попросим пользователя ввести время
         msg = bot.send_message(
             call.message.chat.id,
-            "Пожалуйста, напишите, когда сможете взять задачу (например, '1 августа в 17:00' или '1-3 августа в любое время')."
+            "Пожалуйста, напишите, когда сможете взять задачу (в формате, '1 августа в 17:00' или с указанием промежутка '1-3 августа в любое время')."
         )
         # Передадим task_number и user_id через state (например, в dict pending_time_input)
         if not hasattr(task_manager, "pending_time_input"):
             task_manager.pending_time_input = {}
         task_manager.pending_time_input[user_id] = task_number
         # Отключим клавиатуру для этого сообщения
-        try:
-            bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=None)
-        except Exception as e:
-            logger.warning(f"Не удалось отключить клавиатуру: {e}")
+        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                      reply_markup=None)
         bot.answer_callback_query(call.id, "Укажите желаемое время")
         return
 
     status = STATUS_MAP.get(action)
-    if status:
-        # Инициализация нужных полей в task_data, если их нет (страховка)
-        if 'responded_users' not in task_data or not isinstance(task_data['responded_users'], list):
-            task_data['responded_users'] = []
-        if 'status' not in task_data or not isinstance(task_data['status'], dict):
-            task_data['status'] = {}
 
+    if status:
         if user_id not in task_data['responded_users']:
             task_data['responded_users'].append(user_id)
 
@@ -613,7 +569,7 @@ def handle_user_response(call, action, task_number):
             f"All statuses: {task_data['status']}"
         )
         task_manager.update_main_chat_status(task_number)
-        task_manager.save_state()
+
         try:
             bot.edit_message_reply_markup(
                 chat_id=call.message.chat.id,
@@ -624,9 +580,6 @@ def handle_user_response(call, action, task_number):
         except Exception as e:
             logger.error(f"Error updating message: {e}")
             bot.answer_callback_query(call.id, "Ошибка обновления!")
-    else:
-        logger.error(f"Неизвестное действие: {action}, task_number: {task_number}, user_id: {user_id}")
-        bot.answer_callback_query(call.id, "Неизвестное действие.")
 
 if __name__ == '__main__':
     logger.info("Starting bot...")
