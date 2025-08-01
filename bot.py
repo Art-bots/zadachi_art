@@ -562,30 +562,49 @@ def handle_forum_action(call, action, task_number):
 
 
 def handle_user_response(call, action, task_number):
+    logger.info(f"handle_user_response: action={action}, task_number={task_number}, user_id={call.from_user.id}")
 
-    task_data = task_manager.tasks[task_number]
+    # Безопасно получить данные задачи
+    task_data = task_manager.tasks.get(task_number)
+    if not task_data:
+        logger.error(f"Задача с номером {task_number} не найдена! user_id={call.from_user.id}")
+        bot.send_message(
+            call.message.chat.id,
+            f"Задача с номером {task_number} не найдена или уже неактуальна."
+        )
+        bot.answer_callback_query(call.id, "Задача не найдена.")
+        return
+
     user_id = call.from_user.id
     user_name = f"{call.from_user.first_name} {call.from_user.last_name}" if call.from_user.last_name else call.from_user.first_name
 
     if action == "take_later":
+        logger.info(f"user_id={user_id} запросил вариант взять задачу позже для task_number={task_number}")
         # Попросим пользователя ввести время
         msg = bot.send_message(
             call.message.chat.id,
-            "Пожалуйста, напишите, когда сможете взять задачу (в формате, '1 августа в 17:00' или с указанием промежутка '1-3 августа в любое время')."
+            "Пожалуйста, напишите, когда сможете взять задачу (например, '1 августа в 17:00' или '1-3 августа в любое время')."
         )
         # Передадим task_number и user_id через state (например, в dict pending_time_input)
         if not hasattr(task_manager, "pending_time_input"):
             task_manager.pending_time_input = {}
         task_manager.pending_time_input[user_id] = task_number
         # Отключим клавиатуру для этого сообщения
-        bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                      reply_markup=None)
+        try:
+            bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id, reply_markup=None)
+        except Exception as e:
+            logger.warning(f"Не удалось отключить клавиатуру: {e}")
         bot.answer_callback_query(call.id, "Укажите желаемое время")
         return
 
     status = STATUS_MAP.get(action)
-
     if status:
+        # Инициализация нужных полей в task_data, если их нет (страховка)
+        if 'responded_users' not in task_data or not isinstance(task_data['responded_users'], list):
+            task_data['responded_users'] = []
+        if 'status' not in task_data or not isinstance(task_data['status'], dict):
+            task_data['status'] = {}
+
         if user_id not in task_data['responded_users']:
             task_data['responded_users'].append(user_id)
 
@@ -595,7 +614,7 @@ def handle_user_response(call, action, task_number):
             f"All statuses: {task_data['status']}"
         )
         task_manager.update_main_chat_status(task_number)
-
+        task_manager.save_state()
         try:
             bot.edit_message_reply_markup(
                 chat_id=call.message.chat.id,
@@ -606,6 +625,9 @@ def handle_user_response(call, action, task_number):
         except Exception as e:
             logger.error(f"Error updating message: {e}")
             bot.answer_callback_query(call.id, "Ошибка обновления!")
+    else:
+        logger.error(f"Неизвестное действие: {action}, task_number: {task_number}, user_id: {user_id}")
+        bot.answer_callback_query(call.id, "Неизвестное действие.")
 
 if __name__ == '__main__':
     logger.info("Starting bot...")
