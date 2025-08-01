@@ -47,7 +47,6 @@ MAX_TOPIC_LENGTH = 20
 
 class TaskManager:
     def __init__(self):
-        self.pending_time_input = None
         self.tasks = {}
         self.pending_tasks = {}
         self.threads = {}  # Хранит task_number: thread_id
