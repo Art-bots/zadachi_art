@@ -454,24 +454,49 @@ def handle_take_later_time(message):
 @bot.callback_query_handler(func=lambda call: call.data.startswith(('forum_', 'user_', 'skip')))
 def callback_handler(call):
     try:
+        logger.info(f"Callback data: {call.data} от пользователя {call.from_user.id}")
+
         if call.data == "skip_step":
+            logger.info(f"Обработка skip_step для пользователя {call.from_user.id}")
             handle_skip_step(call)
             return
 
         parts = call.data.split(':', 1)
+        logger.info(f"parts после split: {parts}")
+
         prefix_action = parts[0]
-        task_number = int(parts[1]) if len(parts) > 1 else None
+        task_number = None
+
+        if len(parts) > 1:
+            try:
+                task_number = int(parts[1])
+                logger.info(f"Распознан task_number: {task_number}")
+            except ValueError:
+                logger.error(f"Некорректный формат номера задачи: '{parts[1]}' от пользователя {call.from_user.id}")
+        else:
+            logger.warning(f"В callback data нет номера задачи: {call.data} от пользователя {call.from_user.id}")
+
+        if task_number is None:
+            logger.error(f"task_number is None, callback data: {call.data}, user_id: {call.from_user.id}")
+            bot.answer_callback_query(call.id, "Некорректный запрос (нет номера задачи).")
+            return
 
         if prefix_action.startswith('forum_'):
             action = prefix_action.split('_', 1)[1]
+            logger.info(f"Обработка forum_ с action: {action}, task_number: {task_number}")
             handle_forum_action(call, action, task_number)
         elif prefix_action.startswith('user_'):
             action = prefix_action.split('_', 1)[1]
+            logger.info(f"Обработка user_ с action: {action}, task_number: {task_number}")
             handle_user_response(call, action, task_number)
+        else:
+            logger.error(f"Неизвестный prefix_action: {prefix_action}, callback data: {call.data}")
+            bot.answer_callback_query(call.id, "Некорректный тип действия.")
 
     except Exception as e:
-        logger.error(f"Callback error: {e}")
+        logger.error(f"Callback error: {e}, callback data: {getattr(call, 'data', None)}, user_id: {getattr(call.from_user, 'id', None)}")
         bot.answer_callback_query(call.id, "Ошибка обработки запроса")
+
 
 
 def handle_skip_step(call):
