@@ -378,6 +378,33 @@ def handle_media_message(message, task_data):
     return message.text if message.content_type == 'text' else None
 
 
+@bot.message_handler(func=lambda message: hasattr(task_manager, "pending_time_input") and message.from_user.id in task_manager.pending_time_input)
+def handle_take_later_time(message):
+    user_id = message.from_user.id
+    task_number = task_manager.pending_time_input.pop(user_id)  # Забираем и удаляем флаг
+    task_data = task_manager.tasks.get(task_number)
+    if not task_data:
+        bot.send_message(message.chat.id, "Задача не найдена.")
+        return
+
+    user_name = f"{message.from_user.first_name} {message.from_user.last_name}" if message.from_user.last_name else message.from_user.first_name
+
+    # Формируем статус с доп. комментарием пользователя
+    time_note = message.text.strip()
+    status_text = f"{STATUS_MAP['take_later']} ({time_note})"
+    task_data['status'][user_name] = status_text
+
+    # Сохраним пользователя в responded_users
+    if user_id not in task_data['responded_users']:
+        task_data['responded_users'].append(user_id)
+
+    # Сохраняем, обновляем основной чат
+    task_manager.update_main_chat_status(task_number)
+    task_manager.save_state()
+
+    bot.send_message(message.chat.id, f"Спасибо! Ваш ответ учтён: {status_text}")
+
+
 @bot.message_handler(commands=['start'], chat_types=['private'])
 def start_handler(message):
     if message.from_user.id in SENDER_USER_IDS:
@@ -421,33 +448,6 @@ def process_task_data(message):
             chat_id, f"Теперь отправьте {prompt}.", reply_markup=reply_markup)
     else:
         task_manager.finalize_task(chat_id, task_data)
-
-
-@bot.message_handler(func=lambda message: hasattr(task_manager, "pending_time_input") and message.from_user.id in task_manager.pending_time_input)
-def handle_take_later_time(message):
-    user_id = message.from_user.id
-    task_number = task_manager.pending_time_input.pop(user_id)  # Забираем и удаляем флаг
-    task_data = task_manager.tasks.get(task_number)
-    if not task_data:
-        bot.send_message(message.chat.id, "Задача не найдена.")
-        return
-
-    user_name = f"{message.from_user.first_name} {message.from_user.last_name}" if message.from_user.last_name else message.from_user.first_name
-
-    # Формируем статус с доп. комментарием пользователя
-    time_note = message.text.strip()
-    status_text = f"{STATUS_MAP['take_later']} ({time_note})"
-    task_data['status'][user_name] = status_text
-
-    # Сохраним пользователя в responded_users
-    if user_id not in task_data['responded_users']:
-        task_data['responded_users'].append(user_id)
-
-    # Сохраняем, обновляем основной чат
-    task_manager.update_main_chat_status(task_number)
-    task_manager.save_state()
-
-    bot.send_message(message.chat.id, f"Спасибо! Ваш ответ учтён: {status_text}")
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith(('forum_', 'user_', 'skip')))
