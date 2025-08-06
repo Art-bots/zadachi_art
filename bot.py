@@ -102,6 +102,7 @@ class TaskManager:
 
     def update_main_chat_status(self, task_number):
         task_data = self.tasks[task_number]
+        # Обновление главного чата
         try:
             if 'main_chat_message_id' in task_data:
                 if task_data.get('photo'):
@@ -116,6 +117,24 @@ class TaskManager:
                         message_id=task_data['main_chat_message_id'],
                         text=self.generate_task_message(task_number, task_data, with_status=True),
                     )
+            # Обновление ветки форума
+            if task_number in self.threads and task_number in self.message_ids:
+                forum_msg_id = self.message_ids[task_number]
+                if task_data.get('photo'):
+                    bot.edit_message_caption(
+                        chat_id=INFO_CHAT_ID,
+                        message_id=forum_msg_id,
+                        caption=self.generate_task_message(task_number, task_data, with_status=True),
+                        reply_markup=self.generate_task_controls(task_number, False),
+                    )
+                else:
+                    bot.edit_message_text(
+                        chat_id=INFO_CHAT_ID,
+                        message_id=forum_msg_id,
+                        text=self.generate_task_message(task_number, task_data, with_status=True),
+                        reply_markup=self.generate_task_controls(task_number, False),
+                    )
+
         except Exception as e:
             logger.error(f"Error updating main chat: {e}")
 
