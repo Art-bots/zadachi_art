@@ -45,6 +45,14 @@ ICON_COLOR = 7322096
 MAX_TOPIC_LENGTH = 20
 
 
+def private_chat_only(func):
+    def wrapper(message, *args, **kwargs):
+        if message.chat.type != "private":
+            return  # Не обрабатываем, если это не личка с ботом
+        return func(message, *args, **kwargs)
+    return wrapper
+
+
 class TaskManager:
     def __init__(self):
         self.tasks = {}
@@ -398,9 +406,11 @@ def handle_media_message(message, task_data):
 
 
 @bot.message_handler(func=lambda message: hasattr(task_manager, "pending_time_input") and message.from_user.id in task_manager.pending_time_input)
+@private_chat_only
 def handle_take_later_time(message):
+
     user_id = message.from_user.id
-    task_number = task_manager.pending_time_input.pop(user_id)  # Забираем и удаляем флаг
+    task_number = task_manager.pending_time_input.pop(user_id)
     task_data = task_manager.tasks.get(task_number)
     if not task_data:
         bot.send_message(message.chat.id, "Задача не найдена.")
@@ -408,16 +418,13 @@ def handle_take_later_time(message):
 
     user_name = f"{message.from_user.first_name} {message.from_user.last_name}" if message.from_user.last_name else message.from_user.first_name
 
-    # Формируем статус с доп. комментарием пользователя
     time_note = message.text.strip()
     status_text = f"{STATUS_MAP['take_later']} ({time_note})"
     task_data['status'][user_name] = status_text
 
-    # Сохраним пользователя в responded_users
     if user_id not in task_data['responded_users']:
         task_data['responded_users'].append(user_id)
 
-    # Сохраняем, обновляем основной чат
     task_manager.update_main_chat_status(task_number)
     task_manager.save_state()
 
