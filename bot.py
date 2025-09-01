@@ -388,7 +388,7 @@ def send_unanswered_notification(task_number):
 
     if unanswered_users:
         message = (
-            f"@Lera99925\n"
+            f"@vintapsh\n"
             f"Следующие специалисты не дали ответ на задачу #{task_number} в течение часа:\n"
             f"{', '.join(unanswered_users)}"
         )
