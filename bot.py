@@ -31,7 +31,9 @@ TASK_FIELDS = [
     ('equipment', "Оборудование (марка, модель)"),
     ('cost_and_hours', "Сумма и количество часов"),
     ('contact_person', "Контактное лицо (ФИО и номера)"),
-    ('photo', "Фото задачи (или пропустите)")
+    ('tag', "Тег задачи"),
+    ('photo', "Фото задачи (или пропустите)"),
+
 ]
 
 STATUS_MAP = {
@@ -302,6 +304,7 @@ class TaskManager:
             f"⚙️ Оборудование: {task_data['equipment']}",
             f"💰 Сумма/часы: {task_data['cost_and_hours']}",
             f"📞 Контакты: {task_data['contact_person']}",
+            f"🏷️ Тег {task_data['tag']}"
         ]
 
         if with_status and task_data.get('status'):
