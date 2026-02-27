@@ -304,7 +304,7 @@ class TaskManager:
             f"⚙️ Оборудование: {task_data['equipment']}",
             f"💰 Сумма/часы: {task_data['cost_and_hours']}",
             f"📞 Контакты: {task_data['contact_person']}",
-            f"🏷️ Тег {task_data['tag']}"
+            f"🏷️ Тег: {task_data['tag']}"
         ]
 
         if with_status and task_data.get('status'):
