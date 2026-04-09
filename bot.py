@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from telebot import TeleBot, types
 from apscheduler.schedulers.background import BackgroundScheduler
 from bot_logger import setup_logger
-from config import SENDER_USER_IDS, RECEIVER_USER_IDS, INFO_CHAT_ID
+from config import SENDER_USER_IDS, RECEIVER_USER_IDS, INFO_CHAT_ID, EMOJIS, DEFAULT_EMOJI_ID
 import os
 from dotenv import load_dotenv
 
@@ -33,7 +33,6 @@ TASK_FIELDS = [
     ('contact_person', "Контактное лицо (ФИО и номера)"),
     ('tag', "Тег задачи"),
     ('photo', "Фото задачи (или пропустите)"),
-
 ]
 
 STATUS_MAP = {
@@ -184,13 +183,18 @@ class TaskManager:
             logger.error(f"Error getting sender info: {e}")
             sender_name = "Неизвестный отправитель"
 
+        # Получаем эмодзи для отправителя
+        sender_id = str(chat_id)
+        sender_emoji_id = EMOJIS.get(sender_id, DEFAULT_EMOJI_ID)
+
         task_number = self.task_counter
         task_data.update({
             'sender_name': sender_name,
             'status': {},
             'responded_users': [],
             'is_resolved': False,
-            'sender_id': chat_id
+            'sender_id': chat_id,
+            'sender_emoji_id': sender_emoji_id
         })
 
         self.tasks[task_number] = task_data
@@ -216,7 +220,7 @@ class TaskManager:
             forum_topic = bot.create_forum_topic(
                 INFO_CHAT_ID,
                 topic_name,
-                icon_color=ICON_COLOR
+                icon_custom_emoji_id=sender_emoji_id
             )
             thread_id = forum_topic.message_thread_id
 
@@ -522,6 +526,8 @@ def handle_forum_action(call, action, task_number):
     if not thread_id:
         return bot.answer_callback_query(call.id, "Ошибка топика!")
 
+    sender_emoji_id = task_data.get('sender_emoji_id', DEFAULT_EMOJI_ID)
+
     try:
         new_name = ""
         if action == 'resolve':
@@ -550,7 +556,8 @@ def handle_forum_action(call, action, task_number):
             bot.edit_forum_topic(
                 INFO_CHAT_ID,
                 thread_id,
-                name=new_name
+                name=new_name,
+                icon_custom_emoji_id = sender_emoji_id
             )
 
         # Обновляем сообщение с кнопками
