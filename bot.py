@@ -618,10 +618,24 @@ def handle_user_response(call, action, task_number):
             bot.answer_callback_query(call.id, "Ошибка обновления!")
 
 if __name__ == '__main__':
+    logger.info("Init TaskBot...")
+
+    try:
+        task_manager = TaskManager()
+        bot_info = bot.get_me()
+        logger.info(f"Bot connect: @{bot_info.username}")
+    except Exception as e:
+        logger.error(f"Error init: {e}")
+        exit(1)
+
     logger.info("Starting bot...")
     try:
-        bot.polling(none_stop=True)
+        bot.infinity_polling(none_stop=True, timeout=30, long_polling_timeout=20)
     except KeyboardInterrupt:
+        logger.info("Bot stopped gracefully")
+    except Exception as e:
+        logger.error(f"Error polling: {e}")
+    finally:
         scheduler.shutdown()
         task_manager.save_state()
-        logger.info("Bot stopped gracefully")
+        logger.info("State was saved")
