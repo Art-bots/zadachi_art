@@ -64,7 +64,7 @@ class TaskManager:
 
     def _load_state(self):
         try:
-            with open('task_state.json', 'r') as f:
+            with open('task_state.json', 'r', encoding="utf-8") as f:
                 data = json.load(f)
                 self.task_counter = data.get('task_counter', 1)
                 self.tasks = {int(k): v for k, v in data.get(
@@ -156,7 +156,7 @@ class TaskManager:
             'pending_tasks': self.pending_tasks
         }
         try:
-            with open('task_state.json', 'w') as f:
+            with open('task_state.json', 'w', encoding="utf-8") as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
             logger.info("State saved successfully.")
         except Exception as e:
