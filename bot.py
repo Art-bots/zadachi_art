@@ -58,6 +58,7 @@ class TaskManager:
     def __init__(self):
         self.tasks = {}
         self.pending_tasks = {}
+        self.finalizing_tasks = set()
         self.threads = {}  # Хранит task_number: thread_id
         self.message_ids = {}  # Хранит task_number: message_id
         self._load_state()
@@ -163,6 +164,8 @@ class TaskManager:
             logger.error(f"Error saving state: {e}")
 
     def create_task(self, chat_id):
+        if chat_id in self.pending_tasks:
+            return self.pending_tasks[chat_id]
         self.pending_tasks[chat_id] = {field: None for field, _ in TASK_FIELDS}
         return self.pending_tasks[chat_id]
 
@@ -173,34 +176,44 @@ class TaskManager:
                 return field
         return None
 
-    def finalize_task(self, chat_id, task_data):
-        try:
-            user = bot.get_chat(chat_id)
-            sender_name = f"{user.first_name}"
-            if user.last_name:
-                sender_name += f" {user.last_name}"
-        except Exception as e:
-            logger.error(f"Error getting sender info: {e}")
-            sender_name = "Неизвестный отправитель"
-
-        # Получаем эмодзи для отправителя
-        sender_id = str(chat_id)
-        sender_emoji_id = EMOJIS.get(sender_id, DEFAULT_EMOJI_ID)
-
-        task_number = self.task_counter
-        task_data.update({
-            'sender_name': sender_name,
-            'status': {},
-            'responded_users': [],
-            'is_resolved': False,
-            'sender_id': chat_id,
-            'sender_emoji_id': sender_emoji_id
-        })
-
-        self.tasks[task_number] = task_data
-        self.task_counter += 1
+    def finalize_task(self, chat_id):
+        if chat_id in self.finalizing_tasks:
+            logger.warning(f"Task for chat_id={chat_id} is already finalizing")
+            return
+        self.finalizing_tasks.add(chat_id)
 
         try:
+            task_data = self.pending_tasks.pop(chat_id, None)
+            if not task_data:
+                logger.warning(f"No pending task found for chat_id={chat_id}")
+                return
+            try:
+                user = bot.get_chat(chat_id)
+                sender_name = f"{user.first_name}"
+                if user.last_name:
+                    sender_name += f" {user.last_name}"
+            except Exception as e:
+                logger.error(f"Error getting sender info: {e}")
+                sender_name = "Неизвестный отправитель"
+
+            # Получаем эмодзи для отправителя
+            sender_id = str(chat_id)
+            sender_emoji_id = EMOJIS.get(sender_id, DEFAULT_EMOJI_ID)
+
+            task_number = self.task_counter
+            self.task_counter += 1
+
+            task_data.update({
+                'sender_name': sender_name,
+                'status': {},
+                'responded_users': [],
+                'is_resolved': False,
+                'sender_id': chat_id,
+                'sender_emoji_id': sender_emoji_id
+            })
+
+            self.tasks[task_number] = task_data
+
             # Отправка в основной чат
             if task_data.get('photo'):
                 main_msg = bot.send_photo(
@@ -263,6 +276,8 @@ class TaskManager:
                     scheduler.add_job(
                         send_reminder_to_user,
                         'date',
+                        id=f"reminder_{task_number}_{receiver_id}",
+                        replace_existing=True,
                         run_date=datetime.now() + timedelta(minutes=30),
                         args=[task_number, receiver_id]
                     )
@@ -272,12 +287,11 @@ class TaskManager:
             scheduler.add_job(
                 send_unanswered_notification,
                 'date',
+                id=f"unanswered_{task_number}",
+                replace_existing=True,
                 run_date=datetime.now() + timedelta(minutes=60),
                 args=[task_number]
             )
-
-            del self.pending_tasks[chat_id]
-            self.save_state()
 
             bot.send_message(
                 chat_id,
@@ -289,11 +303,15 @@ class TaskManager:
             task_info_str = json.dumps(task_data, ensure_ascii=False, indent=2)
             logger.info(f"Task #{task_number} was created with data:\n{task_info_str}")
 
-        except Exception as e:
-            #logger.error(f"Error finalizing task: {e}")
-            error_details = traceback.format_exc()
-            logger.error(f"Error sending to user:{error_details}")
-            bot.send_message(chat_id, "❌ Ошибка при создании задачи.")
+        except Exception:
+            logger.error(traceback.format_exc())
+            try:
+                bot.send_message(chat_id, "❌ Ошибка при создании задачи.")
+            except Exception as e:
+                logger.error(f"Error sending error message: {e}")
+
+        finally:
+            self.finalizing_tasks.discard(chat_id)
             self.save_state()
 
     def generate_task_message(self, task_number, task_data, with_status=True):
@@ -347,9 +365,6 @@ class TaskManager:
                 keyboard.add(types.InlineKeyboardButton(
                     btn[0], callback_data=btn[1]))
         return keyboard
-
-
-task_manager = TaskManager()
 
 
 def send_reminder_to_user(task_number, user_id):
@@ -471,16 +486,34 @@ def process_task_data(message):
     if not current_field:
         return
 
-    task_data[current_field] = handle_media_message(message, task_data)
+    if current_field == 'photo':
+        if message.content_type != 'photo':
+            bot.send_message(
+                chat_id,
+                "На этом шаге нужно отправить именно фото или нажать «Пропустить шаг».",
+                reply_markup=skip_step_keyboard()
+            )
+            return
+
+        task_data['photo'] = message.photo[-1].file_id
+    else:
+        if message.content_type != 'text':
+            bot.send_message(
+                chat_id,
+                "Пожалуйста, отправьте текстом или пропустите шаг фото позже.",
+            )
+            return
+
+        task_data[current_field] = message.text.strip()
+
     next_field = task_manager.get_next_field(task_data)
 
     if next_field:
         prompt = TASK_FIELDS[[f[0] for f in TASK_FIELDS].index(next_field)][1]
         reply_markup = skip_step_keyboard() if next_field == 'photo' else None
-        bot.send_message(
-            chat_id, f"Теперь отправьте {prompt}.", reply_markup=reply_markup)
+        bot.send_message(chat_id, f"Теперь отправьте {prompt}.", reply_markup=reply_markup)
     else:
-        task_manager.finalize_task(chat_id, task_data)
+        task_manager.finalize_task(chat_id)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith(('forum_', 'user_', 'skip')))
@@ -511,7 +544,7 @@ def handle_skip_step(call):
     if chat_id in task_manager.pending_tasks:
         task_data = task_manager.pending_tasks[chat_id]
         task_data['photo'] = None
-        task_manager.finalize_task(chat_id, task_data)
+        task_manager.finalize_task(chat_id)
         bot.answer_callback_query(call.id, "Шаг с фото пропущен")
         bot.edit_message_reply_markup(
             chat_id, call.message.message_id, reply_markup=None)
